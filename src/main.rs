@@ -67,6 +67,7 @@ impl AppData {
         let new_player_coord = self.player_coord + direction.coord();
         if new_player_coord.is_valid(self.screen_size) {
             self.player_coord = new_player_coord;
+            println!("Coord: {:?}", new_player_coord);
         }
     }
 
