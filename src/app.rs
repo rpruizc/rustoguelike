@@ -1,4 +1,4 @@
-use crate::game::GameState;
+use crate::game::{GameState, Tile};
 use chargrid::{
     app::{App as ChargridApp, ControlFlow},
     input::{keys, Input, KeyboardInput},
@@ -42,7 +42,7 @@ impl AppView {
     }
 }
 
-impl<'a> chargrid::render::View<&'a AppData> for AppView {
+impl<'a> View<&'a AppData> for AppView {
     // Frame represents the visible output of the app
     // calling set_cell_relative on it draws a character at that position
 
@@ -53,16 +53,20 @@ impl<'a> chargrid::render::View<&'a AppData> for AppView {
     // with constraints. It's also a mechanism to pass color modifiers to child views
 
     // ViewCell is a character with a foreground and a background color, bold or underlined
-    fn view<F: chargrid::app::Frame, C: chargrid::app::ColModify>(
+    fn view<F: Frame, C: ColModify>(
         &mut self, 
         data: &'a AppData, 
-        context: chargrid::render::ViewContext<C>, 
+        context: ViewContext<C>, 
         frame: &mut F
     ) {
-        let view_cell = chargrid::render::ViewCell::new()
-            .with_character('R')
-            .with_foreground(Rgb24::new_grey(255));
-        frame.set_cell_relative(data.game_state.player_coord(), 0, view_cell, context); 
+        for entity_to_render in data.game_state.entities_to_render() {
+            let view_cell = match entity_to_render.tile {
+                Tile::Player => ViewCell::new()
+                    .with_character('R')
+                    .with_foreground(Rgb24::new_grey(255)),
+            };
+            frame.set_cell_relative(entity_to_render.coord, 0, view_cell, context);
+        }
     }
 }
 

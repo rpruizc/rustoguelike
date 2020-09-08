@@ -35,14 +35,6 @@ impl GameState {
         }
     }
 
-    pub fn player_coord(&self) -> Coord {
-        *self
-            .components
-            .coord
-            .get(self.player_entity)
-            .expect("player has no coord component")
-    }
-
     fn spawn_player(&mut self, coord: Coord) {
         self.components.coord.insert(self.player_entity, coord);
         self.components
@@ -52,6 +44,16 @@ impl GameState {
 
     fn populate(&mut self, player_coord: Coord) {
         self.spawn_player(player_coord);
+    }
+
+    // Method returns an iterator over EntityToRender for all the entities
+    pub fn entities_to_render<'a>(&'a self) -> impl 'a + Iterator<Item = EntityToRender> {
+        let coord_component = &self.components.coord;
+        let tile_component = &self.components.tile;
+        tile_component.iter().filter_map(move |(entity, &tile)| {
+            let coord = coord_component.get(entity).cloned()?;
+            Some(EntityToRender { tile, coord})
+        })
     }
 }
 
@@ -65,4 +67,11 @@ entity_table::declare_entity_module! {
         coord: Coord,
         tile: Tile,
     }
+}
+
+// A type is defined to tell the renderer what needs to be rendered. In this case
+// a given tile a t a given position on screen
+pub struct EntityToRender {
+    pub coord: Coord,
+    pub tile: Tile,
 }
