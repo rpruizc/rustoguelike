@@ -2,6 +2,7 @@ use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
 use entity_table::{Entity, EntityAllocator};
 
+use crate::terrain::{self, TerrainTile};
 #[derive(Clone, Copy, Debug)]
 pub enum Tile {
     Player,
@@ -57,7 +58,7 @@ impl GameState {
             screen_size,
             spatial_table,
         };
-        game_state.populate(screen_size.to_coord().unwrap() / 2);
+        game_state.populate();
         game_state
     }
 
@@ -77,14 +78,21 @@ impl GameState {
         }
     }
 
-    fn populate(&mut self, player_coord: Coord) {
-        self.spawn_player(player_coord);
-        for coord in self.screen_size.coord_iter_row_major() {
-            self.spawn_floor(coord);
+    fn populate(&mut self) {
+        let terrain = terrain::generate_dungeon(self.screen_size);
+        for (coord, &terrain_tile) in terrain.enumerate() {
+            match terrain_tile {
+                TerrainTile::Player => {
+                    self.spawn_floor(coord);
+                    self.spawn_player(coord);
+                }
+                TerrainTile::Floor => self.spawn_floor(coord),
+                TerrainTile::Wall => {
+                    self.spawn_floor(coord);
+                    self.spawn_wall(coord);
+                }
+            }
         }
-        self.spawn_wall(player_coord + Coord::new(-1, 2));
-        self.spawn_wall(player_coord + Coord::new(0, 2));
-        self.spawn_wall(player_coord + Coord::new(1, 2));
     }
 
     fn spawn_floor(&mut self, coord: Coord) {

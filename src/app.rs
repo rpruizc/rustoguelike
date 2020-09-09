@@ -62,7 +62,7 @@ impl<'a> View<&'a AppData> for AppView {
         for entity_to_render in data.game_state.entities_to_render() {
             let view_cell = match entity_to_render.tile {
                 Tile::Player => ViewCell::new()
-                    .with_character('R')
+                    .with_character('@')
                     .with_foreground(Rgb24::new_grey(255)),
                 Tile::Floor => ViewCell::new()
                     .with_character('.')
