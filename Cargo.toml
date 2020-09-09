@@ -7,11 +7,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chargrid_graphical = "0.2.3"
 chargrid = "0.3.0"
+chargrid_graphical = "0.2.3"
 coord_2d = "0.2.22"
-rgb24 = "0.2.7"
 direction = "0.17.10"
 entity_table = "0.2.2"
-spatial_table = "0.2.2"
 grid_2d = "0.14.6"
+rand = "0.7.3"
+rand_isaac = "0.2.0"
+rgb24 = "0.2.7"
+spatial_table = "0.2.2"

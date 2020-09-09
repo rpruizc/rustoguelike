@@ -1259,6 +1259,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_isaac"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8df6b0b3dc9991a10b2d91a86d1129314502169a1bf6afa67328945e02498b76"
+dependencies = [
+ "rand_core",
+]
+
+[[package]]
 name = "range-alloc"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1326,6 +1335,8 @@ dependencies = [
  "direction",
  "entity_table",
  "grid_2d",
+ "rand",
+ "rand_isaac",
  "rgb24",
  "spatial_table",
 ]

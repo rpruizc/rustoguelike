@@ -1,6 +1,8 @@
 use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
 use entity_table::{Entity, EntityAllocator};
+use rand::{Rng, SeedableRng};
+use rand_isaac::Isaac64Rng;
 
 use crate::terrain::{self, TerrainTile};
 #[derive(Clone, Copy, Debug)]
@@ -58,7 +60,8 @@ impl GameState {
             screen_size,
             spatial_table,
         };
-        game_state.populate();
+        let mut rng = Isaac64Rng::from_entropy();
+        game_state.populate(&mut rng);
         game_state
     }
 
@@ -78,8 +81,8 @@ impl GameState {
         }
     }
 
-    fn populate(&mut self) {
-        let terrain = terrain::generate_dungeon(self.screen_size);
+    fn populate<R: Rng>(&mut self, rng: &mut R) {
+        let terrain = terrain::generate_dungeon(self.screen_size, rng);
         for (coord, &terrain_tile) in terrain.enumerate() {
             match terrain_tile {
                 TerrainTile::Player => {
