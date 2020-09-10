@@ -8,6 +8,12 @@ const VISION_DISTANCE: shadowcast::vision_distance::Circle =
 
 struct Visibility;
 
+#[derive(Clone, Copy, Debug)]
+pub enum VisibilityAlgorithm {
+    Shadowcast,
+    Ominiscient,
+}
+
 pub struct VisibilityGrid {
     grid: Grid<VisibilityCell>,
     count: u64,
@@ -26,21 +32,31 @@ impl VisibilityGrid {
         player_coord: Coord,
         world: &World,
         shadowcast_context: &mut shadowcast::Context<u8>,
+        algorithm: VisibilityAlgorithm,
     ) {
         self.count += 1;
-        let count = self.count;
-        let grid = &mut self.grid;
-        shadowcast_context.for_each_visible(
-            player_coord,           // centre of vision
-            &Visibility,         // implementation of InputGrid
-            world,                  //world representation (InputGrid::World)
-            VISION_DISTANCE,        // shape and size of visible area
-            255,                    // max opacity value (InputGrid::Opacity)
-            |coord, _visible_directions, _visibility| {
-                let cell = grid.get_checked_mut(coord);
-                cell.last_seen = count;
-            },
-        );
+        match algorithm {
+            VisibilityAlgorithm::Ominiscient => {
+                for cell in self.grid.iter_mut() {
+                    cell.last_seen = self.count;
+                }
+            }
+            VisibilityAlgorithm::Shadowcast => {
+                let count = self.count;
+                let grid = &mut self.grid;
+                shadowcast_context.for_each_visible(
+                    player_coord,           // centre of vision
+                    &Visibility,         // implementation of InputGrid
+                    world,                  //world representation (InputGrid::World)
+                    VISION_DISTANCE,        // shape and size of visible area
+                    255,                    // max opacity value (InputGrid::Opacity)
+                    |coord, _visible_directions, _visibility| {
+                        let cell = grid.get_checked_mut(coord);
+                        cell.last_seen = count;
+                    },
+                );
+            }
+        }
     }
 
     pub fn cell_visibility(&self, coord: Coord) -> CellVisibility {

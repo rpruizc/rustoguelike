@@ -1,5 +1,5 @@
 use crate::game::GameState;
-use crate::visibility::CellVisibility;
+use crate::visibility::{ CellVisibility, VisibilityAlgorithm };
 use crate::world::{Layer, Tile, NpcType};
 use chargrid::{
     app::{App as ChargridApp, ControlFlow},
@@ -13,12 +13,18 @@ use std::time::Duration;
 
 struct AppData {
     game_state: GameState,
+    visibility_algorithm: VisibilityAlgorithm,
 }
 
 impl AppData {
-    fn new(screen_size: Size) -> Self {
+    fn new(
+        screen_size: Size,
+        rng_seed: u64,
+        visibility_algorithm: VisibilityAlgorithm,
+    ) -> Self {
         Self {
-            game_state: GameState::new(screen_size),
+            game_state: GameState::new(screen_size, rng_seed, visibility_algorithm),
+            visibility_algorithm,
         }
     }
 
@@ -34,7 +40,7 @@ impl AppData {
             },
             _ => (),
         }
-        self.game_state.update_visibility();
+        self.game_state.update_visibility(self.visibility_algorithm);
     }
 }
 
@@ -143,9 +149,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(screen_size: Size) -> Self {
+    pub fn new(
+        screen_size: Size,
+        rng_seed: u64,
+        visibility_algorithm: VisibilityAlgorithm,
+    ) -> Self {
         Self {
-            data: AppData::new(screen_size),
+            data: AppData::new(screen_size, rng_seed, visibility_algorithm),
             view: AppView::new(),
         }
     }
