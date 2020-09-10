@@ -1,6 +1,7 @@
 use grid_2d::{Coord, Grid, Size};
-use rand::Rng;
+use rand::{Rng, seq::IteratorRandom, seq::SliceRandom};
 use crate::world::NpcType;
+use crate::world::Tile::Npc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TerrainTile {
@@ -29,12 +30,14 @@ fn carve_corridor(start: Coord, end: Coord, grid: &mut Grid<Option<TerrainTile>>
 pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
     let mut grid = Grid::new_copy(size, None);
     let mut room_centres = Vec::new();
-    
+
+    const NPCS_PER_ROOM_DISTRIBUTION: &[usize] =
+        &[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3, 4];
     // Attempt to add a room a constant number of times
     const NUM_ATTEMPTS: usize = 100;
     for _ in 0..NUM_ATTEMPTS {
         // Make a random room
-        let room = Room::chooose(size, rng);
+        let room = Room::choose(size, rng);
 
         // Carve out the room unless it overlaps with an existing room
         if room.only_intersects_empty(&grid) {
@@ -49,6 +52,10 @@ pub fn generate_dungeon<R: Rng>(size: Size, rng: &mut R) -> Grid<TerrainTile> {
 
             // Build up a list of all room centres for use in constructing corridors
             room_centres.push(room_centre);
+
+            // Add NPCs to the room
+            let &num_npcs = NPCS_PER_ROOM_DISTRIBUTION.choose(rng).unwrap();
+            room.place_npcs(num_npcs, &mut grid, rng);
         }
     }
 
@@ -85,7 +92,7 @@ impl Room {
     }
 
     // Returns a randomly sized room at a random position within `bounds`
-    fn chooose<R: Rng>(bounds: Size, rng: &mut R) -> Self {
+    fn choose<R: Rng>(bounds: Size, rng: &mut R) -> Self {
         let width = rng.gen_range(5, 11);
         let height = rng.gen_range(5, 9);
         let size = Size::new(width, height);
@@ -101,6 +108,22 @@ impl Room {
         self.size
             .coord_iter_row_major()
             .map(move |coord| self.top_left + coord)
+    }
+
+    // Place `n` randomly chosen NPCs at random position within the room
+    fn place_npcs<R: Rng>(&self, n: usize, grid: &mut Grid<Option<TerrainTile>>, rng: &mut R) {
+        for coord in self
+            .coords()
+            .filter(|&coord| grid.get_checked(coord).unwrap() == TerrainTile::Floor)
+            .choose_multiple(rng, n)
+        {
+            let npc_type = if rng.gen_range(0, 100) < 80 {
+                NpcType::Orc
+            } else {
+                NpcType::Troll
+            };
+            *grid.get_checked_mut(coord) = Some(TerrainTile::Npc(npc_type));
+        }
     }
 
     // Retrun true if and only if each cell of `grid` overlapping this room is `None`

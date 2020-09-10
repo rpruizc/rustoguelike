@@ -2,17 +2,9 @@ use crate::terrain::{self, TerrainTile};
 use coord_2d::{Coord, Size};
 use components::Components;
 use direction::CardinalDirection;
-use entity_table::{Entity, EntityAllocator};
+use entity_table::{ComponentTable, Entity, EntityAllocator};
 pub use layers::Layer;
 use rand::Rng;
-
-#[derive(Clone, Copy, Debug)]
-pub enum Tile {
-    Player,
-    Floor,
-    Wall,
-    Npc(NpcType),
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NpcType {
@@ -27,6 +19,14 @@ impl NpcType {
             Self::Troll => "troll",
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Tile {
+    Npc(NpcType),
+    Player,
+    Floor,
+    Wall,
 }
 
 entity_table::declare_entity_module! {
@@ -44,17 +44,18 @@ spatial_table::declare_layers_module! {
     }
 }
 
-type SpatialTable = spatial_table::SpatialTable<layers::Layers>;
 pub type Location = spatial_table::Location<Layer>;
+type SpatialTable = spatial_table::SpatialTable<layers::Layers>;
+
+pub struct Populate {
+    pub player_entity: Entity,
+    pub ai_state: ComponentTable<()>,
+}
 
 pub struct World {
     pub entity_allocator: EntityAllocator,
     pub components: Components,
     pub spatial_table: SpatialTable,
-}
-
-pub struct Populate {
-    pub player_entity: Entity,
 }
 
 impl World {
@@ -66,7 +67,11 @@ impl World {
         let new_player_coord = player_coord + direction.coord();
         if new_player_coord.is_valid(self.spatial_table.grid_size()) {
             let dest_layers = self.spatial_table.layers_at_checked(new_player_coord);
-            if dest_layers.character.is_none() && dest_layers.feature.is_none() {
+            if let Some(character) = dest_layers.character {
+                if let Some(npc_type) = self.components.npc_type.get(character) {
+                    println!("Bump into the {}", npc_type.name());
+                }
+            } else if dest_layers.feature.is_none() {
                 self.spatial_table
                     .update_coord(character_entity, new_player_coord)
                     .unwrap();
@@ -85,6 +90,10 @@ impl World {
         }
     }
 
+    pub fn npc_type(&self, entity: Entity) -> Option<NpcType> {
+        self.components.npc_type.get(entity).cloned()
+    }
+
     pub fn opacity_at(&self, coord: Coord) -> u8 {
         if self
             .spatial_table
@@ -101,6 +110,7 @@ impl World {
     pub fn populate<R: Rng>(&mut self, rng: &mut R) -> Populate {
         let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
         let mut player_entity = None;
+        let mut ai_state = ComponentTable::default();
         for (coord, &terrain_tile) in terrain.enumerate() {
             match terrain_tile {
                 TerrainTile::Floor => self.spawn_floor(coord),
@@ -120,6 +130,7 @@ impl World {
             }
         }
         Populate {
+            ai_state,
             player_entity: player_entity.unwrap(),
         }
     }

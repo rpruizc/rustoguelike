@@ -1,10 +1,10 @@
-use crate::world::{Location, Populate, Tile, World};
 use coord_2d::Size;
+use crate::visibility::{CellVisibility, VisibilityGrid};
+use crate::world::{Location, Populate, Tile, World};
 use direction::CardinalDirection;
-use entity_table::Entity;
+use entity_table::{ComponentTable, Entity};
 use rand::SeedableRng;
 use rand_isaac::Isaac64Rng;
-use crate::visibility::{CellVisibility, VisibilityGrid};
 
 // A type is defined to tell the renderer what needs to be rendered. In this case
 // a given tile a t a given position on screen
@@ -15,24 +15,36 @@ pub struct EntityToRender {
 }
 
 pub struct GameState {
-    world: World,
+    ai_state: ComponentTable<()>,
     player_entity: Entity,
     shadowcast_context: shadowcast::Context<u8>,
     visibility_grid: VisibilityGrid,
+    world: World,
 }
 
 impl GameState {
+    fn ai_turn(&mut self) {
+        for (entity, ()) in self.ai_state.iter_mut() {
+            let npc_type = self.world.npc_type(entity).unwrap();
+            println!("The {} ponders its existence", npc_type.name());
+        }
+    }
+
     pub fn new(screen_size: Size) -> Self {
         let mut world = World::new(screen_size);
         let mut rng = Isaac64Rng::from_entropy();
-        let Populate { player_entity } = world.populate(&mut rng);
+        let Populate {
+            ai_state,
+            player_entity,
+        } = world.populate(&mut rng);
         let shadowcast_context = shadowcast::Context::default();
         let visibility_grid = VisibilityGrid::new(screen_size);
         let mut game_state = Self {
-            world,
+            ai_state,
             player_entity,
             shadowcast_context,
             visibility_grid,
+            world,
         };
         game_state.update_visibility();
         game_state
@@ -41,6 +53,7 @@ impl GameState {
     pub fn maybe_move_player(&mut self, direction: CardinalDirection) {
         self.world
             .maybe_move_character(self.player_entity, direction);
+        self.ai_turn();
     }
 
     // Method returns an iterator over EntityToRender for all the entities
