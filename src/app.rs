@@ -29,6 +29,7 @@ impl AppData {
                 KeyboardInput::Right => self.game_state.maybe_move_player(CardinalDirection::East),
                 KeyboardInput::Up => self.game_state.maybe_move_player(CardinalDirection::North),
                 KeyboardInput::Down => self.game_state.maybe_move_player(CardinalDirection::South),
+                KeyboardInput::Char(' ') => self.game_state.wait_player(),
                 _ => (),
             },
             _ => (),

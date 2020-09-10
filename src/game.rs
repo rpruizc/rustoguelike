@@ -77,4 +77,8 @@ impl GameState {
         self.visibility_grid
             .update(player_coord, &self.world, &mut self.shadowcast_context);
     }
+
+    pub fn wait_player(&mut self) {
+        self.ai_turn();
+    }
 }
