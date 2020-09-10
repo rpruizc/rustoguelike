@@ -1,7 +1,6 @@
 use grid_2d::{Coord, Grid, Size};
 use rand::{Rng, seq::IteratorRandom, seq::SliceRandom};
 use crate::world::NpcType;
-use crate::world::Tile::Npc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TerrainTile {

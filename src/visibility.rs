@@ -11,7 +11,7 @@ struct Visibility;
 #[derive(Clone, Copy, Debug)]
 pub enum VisibilityAlgorithm {
     Shadowcast,
-    Ominiscient,
+    Omniscient,
 }
 
 pub struct VisibilityGrid {
@@ -36,7 +36,7 @@ impl VisibilityGrid {
     ) {
         self.count += 1;
         match algorithm {
-            VisibilityAlgorithm::Ominiscient => {
+            VisibilityAlgorithm::Omniscient => {
                 for cell in self.grid.iter_mut() {
                     cell.last_seen = self.count;
                 }

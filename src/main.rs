@@ -1,15 +1,50 @@
 use app::App;
 use chargrid_graphical::{Context, ContextDescriptor, Dimensions, FontBytes};
 use coord_2d::Size;
+use rand::Rng;
+use simon::Arg;
+use visibility::VisibilityAlgorithm;
+
 
 mod app;
 mod game;
 mod terrain;
-mod world;
 mod visibility;
+mod world;
+
+struct Args {
+    rng_seed: u64,
+    visibility_algorithm: VisibilityAlgorithm,
+}
+
+impl Args {
+    fn parser() -> impl Arg<Item = Self> {
+        simon::args_map! {
+            let {
+                rng_seed = simon::opt("r", "rng-seed", "seed for random number generator", "INT")
+                    .with_default_lazy(|| rand::thread_rng().gen());
+                visibility_algorithm = simon::flag("", "debug-omniscient", "enable omniscience")
+                    .map(|omniscient| if omniscient {
+                        VisibilityAlgorithm::Omniscient
+                    } else {
+                        VisibilityAlgorithm::Shadowcast
+                    });
+            } in {
+                Self { rng_seed, visibility_algorithm }
+            }
+        }
+    }
+}
 
 fn main() {
     const CELL_SIZE_PX: f64 = 24.;
+
+    let Args {
+        rng_seed,
+        visibility_algorithm,
+    } = Args::parser().with_help_default().parse_env_or_exit();
+    println!("RNG Seed: {}", rng_seed);
+
     let context = Context::new(ContextDescriptor {
         font_bytes: FontBytes {
             normal: include_bytes!("./fonts/PxPlus_IBM_CGAthin.ttf").to_vec(),
@@ -37,6 +72,6 @@ fn main() {
     })
     .expect("Failed to initialize the graphical context");
     let screen_size = Size::new(40, 30);
-    let app = App::new(screen_size);
+    let app = App::new(screen_size, rng_seed, visibility_algorithm);
     context.run_app(app);
 }
