@@ -1,6 +1,6 @@
 use app::App;
 use chargrid_graphical::{Context, ContextDescriptor, Dimensions, FontBytes};
-use coord_2d::{Coord, Size};
+use coord_2d::Size;
 
 mod app;
 mod game;

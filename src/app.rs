@@ -1,6 +1,6 @@
 use crate::game::GameState;
 use crate::visibility::CellVisibility;
-use crate::world::{Layer, Tile};
+use crate::world::{Layer, Tile, NpcType};
 use chargrid::{
     app::{App as ChargridApp, ControlFlow},
     input::{keys, Input, KeyboardInput},
@@ -47,13 +47,21 @@ impl AppView {
 
 fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
     match tile {
-        Tile::Player => ViewCell::new()
-            .with_character('@')
-            .with_foreground(Rgb24::new_grey(255)),
         Tile::Floor => ViewCell::new()
             .with_character('.')
             .with_foreground(Rgb24::new_grey(63))
             .with_background(Rgb24::new(0, 0,63)),
+        Tile::Npc(NpcType::Orc) => ViewCell::new()
+            .with_character('o')
+            .with_bold(true)
+            .with_foreground(Rgb24::new(0, 187, 0)),
+        Tile::Npc(NpcType::Troll) => ViewCell::new()
+            .with_character('T')
+            .with_bold(true)
+            .with_foreground(Rgb24::new(187, 0, 0)),
+        Tile::Player => ViewCell::new()
+            .with_character('@')
+            .with_foreground(Rgb24::new_grey(255)),
         Tile::Wall => ViewCell::new()
             .with_character('#')
             .with_foreground(Rgb24::new(0, 63, 63))
@@ -63,13 +71,21 @@ fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
 
 fn previously_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
     match tile {
-        Tile::Player => ViewCell::new()
-            .with_character('@')
-            .with_foreground(Rgb24::new_grey(255)),
         Tile::Floor => ViewCell::new()
             .with_character('.')
             .with_foreground(Rgb24::new_grey(63))
             .with_background(Rgb24::new_grey(0)),
+        Tile::Npc(NpcType::Orc) => ViewCell::new()
+            .with_character('o')
+            .with_bold(true)
+            .with_foreground(Rgb24::new_grey(63)),
+        Tile::Npc(NpcType::Troll) => ViewCell::new()
+            .with_character('T')
+            .with_bold(true)
+            .with_foreground(Rgb24::new_grey(63)),
+        Tile::Player => ViewCell::new()
+            .with_character('@')
+            .with_foreground(Rgb24::new_grey(255)),
         Tile::Wall => ViewCell::new()
             .with_character('#')
             .with_foreground(Rgb24::new_grey(63))
