@@ -6,6 +6,7 @@ mod app;
 mod game;
 mod terrain;
 mod world;
+mod visibility;
 
 fn main() {
     const CELL_SIZE_PX: f64 = 24.;
