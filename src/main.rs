@@ -7,6 +7,7 @@ use visibility::VisibilityAlgorithm;
 
 
 mod app;
+mod behaviour;
 mod game;
 mod terrain;
 mod visibility;

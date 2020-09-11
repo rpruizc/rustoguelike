@@ -59,6 +59,34 @@ pub struct World {
 }
 
 impl World {
+    // NPCs can enter a cell even if it does contain a feature or another NPC
+    pub fn can_npc_enter_ignoring_other_npcs(&self, coord: Coord) -> bool {
+        self.spatial_table
+            .layers_at(coord)
+            .map(|layers| layers.feature.is_none())
+            .unwrap_or(false)
+    }
+
+    // NPCs can enter a cell if it doesn't contain a feature or another NPC
+    pub fn can_npc_enter(&self, coord: Coord) -> bool {
+        self.spatial_table
+            .layers_at(coord)
+            .map(|layers| {
+                let contains_npc = layers
+                    .character
+                    .map(|entity| self.components.npc_type.contains(entity))
+                    .unwrap_or(false);
+                let contains_feature = layers.feature.is_some();
+                !(contains_npc || contains_feature)
+            })
+            .unwrap_or(false)
+    }
+
+    // To help with pathfinding, return the coordinate of an entity
+    pub fn entity_coord(&self, entity: Entity) -> Option<Coord> {
+        self.spatial_table.coord_of(entity)
+    }
+
     pub fn maybe_move_character(&mut self, character_entity: Entity, direction: CardinalDirection) {
         let player_coord = self
             .spatial_table
