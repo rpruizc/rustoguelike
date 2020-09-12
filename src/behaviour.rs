@@ -11,6 +11,43 @@ use grid_search_cardinal::{
     CanEnter,
 };
 
+pub struct Agent {}
+
+impl Agent {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    // Chooses an action for an NPC to take
+    // A second implementation of CanEnter is necessary so NPCs can route around another NPC
+    pub fn act(
+        &mut self,
+        entity: Entity,
+        world: &World,
+        behaviour_context: &mut BehaviourContext,
+    ) -> NpcAction {
+        struct NpcCanEnter<'a> {
+            world: &'a World,
+        }
+        impl<'a> CanEnter for NpcCanEnter<'a> {
+            fn can_enter(&self, coord: Coord) -> bool {
+                self.world.can_npc_enter(coord)
+            }
+        }
+        let npc_coord = world.entity_coord(entity).expect("npc has no coord");
+        const SEARCH_DISTANCE: u32 = 5;
+        match behaviour_context.distance_map_search_context.search_first(
+            &NpcCanEnter { world },
+            npc_coord,
+            SEARCH_DISTANCE,
+            &behaviour_context.distance_map_to_player,
+        ) {
+            None => NpcAction::Wait,
+            Some(direction) => NpcAction::Move(direction),
+        }
+    }
+}
+
 pub struct BehaviourContext {
     distance_map_to_player: DistanceMap,
     distance_map_populate_context: DistanceMapPopulateContext,
@@ -26,6 +63,7 @@ impl BehaviourContext {
         }
     }
 
+    // Updates the distance map such that each cell contains the distance to the player
     pub fn update(&mut self, player: Entity, world: &World) {
         struct NpcCanEnterIgnoringOtherNpcs<'a> {
             world: &'a World,
@@ -44,4 +82,10 @@ impl BehaviourContext {
             &mut self.distance_map_to_player,
         );
     }
+}
+
+// These are the different action and NPN can take
+pub enum NpcAction {
+    Move(CardinalDirection),
+    Wait,
 }

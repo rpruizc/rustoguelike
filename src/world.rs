@@ -1,4 +1,6 @@
+use crate::behaviour::Agent;
 use crate::terrain::{self, TerrainTile};
+
 use coord_2d::{Coord, Size};
 use components::Components;
 use direction::CardinalDirection;
@@ -23,24 +25,24 @@ impl NpcType {
 
 #[derive(Clone, Copy, Debug)]
 pub enum Tile {
+    Floor,
     Npc(NpcType),
     Player,
-    Floor,
     Wall,
 }
 
 entity_table::declare_entity_module! {
     components {
-        tile: Tile,
         npc_type: NpcType,
+        tile: Tile,
     }
 }
 
 spatial_table::declare_layers_module! {
     layers {
-        floor: Floor,
         character: Character,
         feature: Feature,
+        floor: Floor,
     }
 }
 
@@ -49,7 +51,7 @@ type SpatialTable = spatial_table::SpatialTable<layers::Layers>;
 
 pub struct Populate {
     pub player_entity: Entity,
-    pub ai_state: ComponentTable<()>,
+    pub ai_state: ComponentTable<Agent>,
 }
 
 pub struct World {
@@ -118,10 +120,6 @@ impl World {
         }
     }
 
-    pub fn npc_type(&self, entity: Entity) -> Option<NpcType> {
-        self.components.npc_type.get(entity).cloned()
-    }
-
     pub fn opacity_at(&self, coord: Coord) -> u8 {
         if self
             .spatial_table
@@ -136,16 +134,16 @@ impl World {
     }
 
     pub fn populate<R: Rng>(&mut self, rng: &mut R) -> Populate {
-        let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
-        let mut player_entity = None;
         let mut ai_state = ComponentTable::default();
+        let mut player_entity = None;
+        let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
         for (coord, &terrain_tile) in terrain.enumerate() {
             match terrain_tile {
                 TerrainTile::Floor => self.spawn_floor(coord),
                 TerrainTile::Npc(npc_type) => {
                     let entity = self.spawn_npc(coord,npc_type);
                     self.spawn_floor(coord);
-                    ai_state.insert(entity, ());
+                    ai_state.insert(entity, Agent::new());
                 }
                 TerrainTile::Player => {
                     self.spawn_floor(coord);
