@@ -1,6 +1,6 @@
 use crate::behaviour::{Agent, BehaviourContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
-use crate::world::{Location, Populate, Tile, World};
+use crate::world::{HitPoints, Location, Populate, Tile, World};
 
 use coord_2d::Size;
 use direction::CardinalDirection;
@@ -51,8 +51,36 @@ impl GameState {
         }
     }
 
+    // Method returns an iterator over EntityToRender for all the entities
+    pub fn entities_to_render<'a>(&'a self) -> impl 'a + Iterator<Item = EntityToRender> {
+        let tile_component = &self.world.components.tile;
+        let spatial_table = &self.world.spatial_table;
+        let visibility_grid = &self.visibility_grid;
+        tile_component.iter().filter_map(move |(entity, &tile)| {
+            let &location = spatial_table.location_of(entity)?;
+            let visibility = visibility_grid.cell_visibility(location.coord);
+            Some(EntityToRender {
+                tile,
+                location,
+                visibility,
+            })
+        })
+    }
+
     pub fn is_player_alive(&self) -> bool {
         self.world.is_living_character(self.player_entity)
+    }
+
+    pub fn maybe_move_player(&mut self, direction: CardinalDirection) {
+        self.world
+            .maybe_move_character(self.player_entity, direction);
+        self.ai_turn();
+    }
+
+    pub fn player_hit_points(&self) -> HitPoints {
+        self.world
+            .hit_points(self.player_entity)
+            .expect("player has no hit points")
     }
 
     pub fn new(
@@ -79,28 +107,6 @@ impl GameState {
         };
         game_state.update_visibility(initial_visibility_algorithm);
         game_state
-    }
-
-    pub fn maybe_move_player(&mut self, direction: CardinalDirection) {
-        self.world
-            .maybe_move_character(self.player_entity, direction);
-        self.ai_turn();
-    }
-
-    // Method returns an iterator over EntityToRender for all the entities
-    pub fn entities_to_render<'a>(&'a self) -> impl 'a + Iterator<Item = EntityToRender> {
-        let tile_component = &self.world.components.tile;
-        let spatial_table = &self.world.spatial_table;
-        let visibility_grid = &self.visibility_grid;
-        tile_component.iter().filter_map(move |(entity, &tile)| {
-            let &location = spatial_table.location_of(entity)?;
-            let visibility = visibility_grid.cell_visibility(location.coord);
-            Some(EntityToRender {
-                tile,
-                location,
-                visibility,
-            })
-        })
     }
 
     pub fn update_visibility(&mut self, visibility_algorithm: VisibilityAlgorithm) {

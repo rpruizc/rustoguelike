@@ -11,6 +11,7 @@ mod behaviour;
 mod game;
 mod terrain;
 mod visibility;
+mod ui;
 mod world;
 
 struct Args {

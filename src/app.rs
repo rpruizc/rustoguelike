@@ -1,15 +1,62 @@
 use crate::game::GameState;
 use crate::visibility::{ CellVisibility, VisibilityAlgorithm };
+use crate::ui::{UiData, UiView};
 use crate::world::{Layer, Tile, NpcType};
+
 use chargrid::{
     app::{App as ChargridApp, ControlFlow},
     input::{keys, Input, KeyboardInput},
     render::{ColModify, Frame, View, ViewCell, ViewContext},
 };
-use coord_2d::Size;
+use coord_2d::{Coord,Size};
 use direction::CardinalDirection;
 use rgb24::Rgb24;
 use std::time::Duration;
+
+const UI_NUM_ROWS: u32 = 2;
+
+pub struct App {
+    data: AppData,
+    view: AppView,
+}
+
+impl App {
+    pub fn new(
+        screen_size: Size,
+        rng_seed: u64,
+        visibility_algorithm: VisibilityAlgorithm,
+    ) -> Self {
+        Self {
+            data: AppData::new(screen_size, rng_seed, visibility_algorithm),
+            view: AppView::new(screen_size),
+        }
+    }
+}
+
+impl ChargridApp for App {
+    fn on_input(&mut self, input: Input) -> Option<ControlFlow> {
+        match input {
+            Input::Keyboard(keys::ETX) | Input::Keyboard(keys::ESCAPE) => Some(ControlFlow::Exit),
+            other => {
+                self.data.handle_input(other);
+                None
+            }
+        }
+    }
+    fn on_frame<F, C>(
+        &mut self,
+        _since_last_frame: Duration,
+        view_context: ViewContext<C>,
+        frame: &mut F,
+    ) -> Option<ControlFlow>
+        where
+            F: Frame,
+            C: ColModify,
+    {
+        self.view.view(&self.data, view_context, frame);
+        None
+    }
+}
 
 struct AppData {
     game_state: GameState,
@@ -22,6 +69,7 @@ impl AppData {
         rng_seed: u64,
         visibility_algorithm: VisibilityAlgorithm,
     ) -> Self {
+        let game_area_size = screen_size.set_height(screen_size.height() - UI_NUM_ROWS);
         Self {
             game_state: GameState::new(screen_size, rng_seed, visibility_algorithm),
             visibility_algorithm,
@@ -47,11 +95,80 @@ impl AppData {
     }
 }
 
-struct AppView {}
+struct AppView {
+    game_view: GameView,
+    ui_view: UiView,
+    ui_y_offset: i32,
+}
 
 impl AppView {
-    fn new() -> Self {
-        Self {}
+    fn new(screen_size: Size) -> Self {
+        const UI_Y_PADDING: u32 = 1;
+        let ui_y_offset = (screen_size.height() - UI_NUM_ROWS + UI_Y_PADDING) as i32;
+        Self {
+            game_view: GameView::default(),
+            ui_view: UiView::default(),
+            ui_y_offset,
+        }
+    }
+}
+
+// Frame represents the visible output of the app
+// calling set_cell_relative on it draws a character at that position
+
+// ColModify represents the color modifier
+// mainly used to dim the game area while a menu is visible
+
+// ViewContext allows a view to tell child views to render at an offset or
+// with constraints. It's also a mechanism to pass color modifiers to child views
+
+// ViewCell is a character with a foreground and a background color, bold or underlined
+impl<'a> View<&'a AppData> for AppView {
+    fn view<F: Frame, C: ColModify>(
+        &mut self,
+        data: &'a AppData,
+        context: ViewContext<C>,
+        frame: &mut F
+    ) {
+        self.game_view.view(&data.game_state, context, frame);
+        let player_hit_points = data.game_state.player_hit_points();
+        self.ui_view.view(
+            UiData { player_hit_points },
+            context.add_offset(Coord::new(0, self.ui_y_offset)),
+            frame,
+        );
+    }
+}
+
+#[derive(Default)]
+struct GameView {}
+
+impl<'a> View<&'a GameState> for GameView {
+    fn view<F: Frame, C: ColModify>(
+        &mut self,
+        game_state: &'a GameState,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) {
+        for entity_to_render in game_state.entities_to_render() {
+            let view_cell = match entity_to_render.visibility {
+                CellVisibility::Currently => {
+                    currently_visible_view_cell_of_tile(entity_to_render.tile)
+                }
+                CellVisibility::Previously => {
+                    previously_visible_view_cell_of_tile(entity_to_render.tile)
+                }
+                CellVisibility::Never => ViewCell::new(),
+            };
+            let depth = match entity_to_render.location.layer {
+                None => -1,
+                Some(Layer::Floor) => 0,
+                Some(Layer::Feature) => 1,
+                Some(Layer::Corpse) => 2,
+                Some(Layer::Character) => 3,
+            };
+            frame.set_cell_relative(entity_to_render.location.coord, depth, view_cell, context);
+        }
     }
 }
 
@@ -128,92 +245,5 @@ fn previously_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
             .with_foreground(Rgb24::new_grey(63))
             .with_background(Rgb24::new_grey(0)),
         _ => ViewCell::new(),
-    }
-}
-
-// Frame represents the visible output of the app
-// calling set_cell_relative on it draws a character at that position
-
-// ColModify represents the color modifier
-// mainly used to dim the game area while a menu is visible
-
-// ViewContext allows a view to tell child views to render at an offset or
-// with constraints. It's also a mechanism to pass color modifiers to child views
-
-// ViewCell is a character with a foreground and a background color, bold or underlined
-impl<'a> View<&'a AppData> for AppView {
-    fn view<F: Frame, C: ColModify>(
-        &mut self, 
-        data: &'a AppData, 
-        context: ViewContext<C>, 
-        frame: &mut F
-    ) {
-        for entity_to_render in data.game_state.entities_to_render() {
-            let view_cell = match entity_to_render.visibility {
-                CellVisibility::Currently => {
-                    currently_visible_view_cell_of_tile(entity_to_render.tile)
-                }
-                CellVisibility::Previously => {
-                    previously_visible_view_cell_of_tile(entity_to_render.tile)
-                }
-                CellVisibility::Never => ViewCell::new(),
-            };
-            let depth = match entity_to_render.location.layer {
-                None => -1,
-                Some(Layer::Floor) => 0,
-                Some(Layer::Feature) => 1,
-                Some(Layer::Corpse) => 2,
-                Some(Layer::Character) => 3,
-            };
-            frame.set_cell_relative(
-                entity_to_render.location.coord,
-                depth,
-                view_cell,
-                context
-            );
-        }
-    }
-}
-
-pub struct App {
-    data: AppData,
-    view: AppView,
-}
-
-impl App {
-    pub fn new(
-        screen_size: Size,
-        rng_seed: u64,
-        visibility_algorithm: VisibilityAlgorithm,
-    ) -> Self {
-        Self {
-            data: AppData::new(screen_size, rng_seed, visibility_algorithm),
-            view: AppView::new(),
-        }
-    }
-}
-
-impl ChargridApp for App {
-    fn on_input(&mut self, input: Input) -> Option<ControlFlow> {
-        match input {
-            Input::Keyboard(keys::ETX) | Input::Keyboard(keys::ESCAPE) => Some(ControlFlow::Exit),
-            other => {
-                self.data.handle_input(other);
-                None
-            }
-        }
-    }
-    fn on_frame<F, C>(
-        &mut self,
-        _since_last_frame: Duration,
-        view_context: ViewContext<C>,
-        frame: &mut F,
-    ) -> Option<ControlFlow>
-    where
-        F: Frame,
-        C: ColModify,
-    {
-        self.view.view(&self.data, view_context, frame);
-        None
     }
 }
