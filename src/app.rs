@@ -29,6 +29,9 @@ impl AppData {
     }
 
     fn handle_input(&mut self, input: Input) {
+        if !self.game_state.is_player_alive() {
+            return;
+        }
         match input {
             Input::Keyboard(key) => match key {
                 KeyboardInput::Left => self.game_state.maybe_move_player(CardinalDirection::West),
@@ -52,6 +55,13 @@ impl AppView {
     }
 }
 
+mod colours {
+    use rgb24::Rgb24;
+    pub const PLAYER: Rgb24 = Rgb24::new_grey(255);
+    pub const ORC: Rgb24 = Rgb24::new(0, 187, 0);
+    pub const TROLL: Rgb24 = Rgb24::new(187, 0, 0);
+}
+
 fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
     match tile {
         Tile::Floor => ViewCell::new()
@@ -66,9 +76,20 @@ fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
             .with_character('T')
             .with_bold(true)
             .with_foreground(Rgb24::new(187, 0, 0)),
+        Tile::NpcCorpse(NpcType::Orc) => ViewCell::new()
+            .with_character('%')
+            .with_bold(true)
+            .with_foreground(colours::ORC),
+        Tile::NpcCorpse(NpcType::Troll) => ViewCell::new()
+            .with_character('%')
+            .with_bold(true)
+            .with_foreground(colours::TROLL),
         Tile::Player => ViewCell::new()
             .with_character('@')
             .with_foreground(Rgb24::new_grey(255)),
+        Tile::PlayerCorpse => ViewCell::new()
+            .with_character('%')
+            .with_foreground(colours::PLAYER),
         Tile::Wall => ViewCell::new()
             .with_character('#')
             .with_foreground(Rgb24::new(0, 63, 63))
@@ -90,27 +111,37 @@ fn previously_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
             .with_character('T')
             .with_bold(true)
             .with_foreground(Rgb24::new_grey(63)),
+        Tile::NpcCorpse(NpcType::Orc) => ViewCell::new()
+            .with_character('%')
+            .with_foreground(Rgb24::new_grey(63)),
+        Tile::NpcCorpse(NpcType::Troll) => ViewCell::new()
+            .with_character('%')
+            .with_foreground(Rgb24::new_grey(63)),
         Tile::Player => ViewCell::new()
             .with_character('@')
+            .with_foreground(Rgb24::new_grey(255)),
+        Tile::PlayerCorpse => ViewCell::new()
+            .with_character('%')
             .with_foreground(Rgb24::new_grey(255)),
         Tile::Wall => ViewCell::new()
             .with_character('#')
             .with_foreground(Rgb24::new_grey(63))
             .with_background(Rgb24::new_grey(0)),
+        _ => ViewCell::new(),
     }
 }
 
+// Frame represents the visible output of the app
+// calling set_cell_relative on it draws a character at that position
+
+// ColModify represents the color modifier
+// mainly used to dim the game area while a menu is visible
+
+// ViewContext allows a view to tell child views to render at an offset or
+// with constraints. It's also a mechanism to pass color modifiers to child views
+
+// ViewCell is a character with a foreground and a background color, bold or underlined
 impl<'a> View<&'a AppData> for AppView {
-    // Frame represents the visible output of the app
-    // calling set_cell_relative on it draws a character at that position
-
-    // ColModify represents the color modifier
-    // mainly used to dim the game area while a menu is visible
-
-    // ViewContext allows a view to tell child views to render at an offset or 
-    // with constraints. It's also a mechanism to pass color modifiers to child views
-
-    // ViewCell is a character with a foreground and a background color, bold or underlined
     fn view<F: Frame, C: ColModify>(
         &mut self, 
         data: &'a AppData, 
@@ -131,7 +162,8 @@ impl<'a> View<&'a AppData> for AppView {
                 None => -1,
                 Some(Layer::Floor) => 0,
                 Some(Layer::Feature) => 1,
-                Some(Layer::Character) => 2,
+                Some(Layer::Corpse) => 2,
+                Some(Layer::Character) => 3,
             };
             frame.set_cell_relative(
                 entity_to_render.location.coord,
