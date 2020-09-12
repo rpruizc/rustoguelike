@@ -84,6 +84,14 @@ impl World {
             .unwrap_or(false)
     }
 
+    // Tests whether an NPC can see through the cell at a given coordinate
+    pub fn can_npc_see_through_cell(&self, coord: Coord) -> bool {
+        self.spatial_table
+            .layers_at(coord)
+            .map(|layers| layers.feature.is_none())
+            .unwrap_or(false)
+    }
+
     // To help with pathfinding, return the coordinate of an entity
     pub fn entity_coord(&self, entity: Entity) -> Option<Coord> {
         self.spatial_table.coord_of(entity)

@@ -883,6 +883,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "line_2d"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "994a465494663a329ed042a2b71d83cc8a7fd839f42e7b01a2b8a944a5cbb3eb"
+dependencies = [
+ "coord_2d",
+ "direction",
+]
+
+[[package]]
 name = "line_drawing"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1399,6 +1409,7 @@ dependencies = [
  "entity_table",
  "grid_2d",
  "grid_search_cardinal",
+ "line_2d",
  "rand",
  "rand_isaac",
  "rgb24",
