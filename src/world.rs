@@ -146,6 +146,10 @@ impl World {
         self.spatial_table.coord_of(entity)
     }
 
+    pub fn hit_points(&self, entity: Entity) -> Option<HitPoints> {
+        self.components.hit_points.get(entity).cloned()
+    }
+
     pub fn is_living_character(&self, entity: Entity) -> bool {
         self.spatial_table.layer_of(entity) == Some(Layer::Character)
     }
