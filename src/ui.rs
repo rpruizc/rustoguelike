@@ -1,5 +1,4 @@
 use crate::world::HitPoints;
-
 use chargrid::{
     decorator::{AlignView, Alignment, BoundView},
     render::{ColModify, Frame, Style, View, ViewCell, ViewContext},
@@ -22,7 +21,7 @@ pub struct UiView {
 }
 
 impl View<UiData> for UiView {
-    fn view<F:Frame, C: ColModify>(
+    fn view<F: Frame, C: ColModify>(
         &mut self,
         data: UiData,
         context: ViewContext<C>,
@@ -34,7 +33,8 @@ impl View<UiData> for UiView {
             &mut self.buf,
             "{}/{}",
             data.player_hit_points.current, data.player_hit_points.max
-        ).unwrap();
+        )
+        .unwrap();
         let mut hit_points_text_view = BoundView {
             size: Size::new(HEALTH_WIDTH, 1),
             view: AlignView {

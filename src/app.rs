@@ -1,62 +1,18 @@
 use crate::game::GameState;
-use crate::visibility::{ CellVisibility, VisibilityAlgorithm };
 use crate::ui::{UiData, UiView};
-use crate::world::{Layer, Tile, NpcType};
-
+use crate::visibility::{CellVisibility, VisibilityAlgorithm};
+use crate::world::{Layer, NpcType, Tile};
 use chargrid::{
     app::{App as ChargridApp, ControlFlow},
     input::{keys, Input, KeyboardInput},
     render::{ColModify, Frame, View, ViewCell, ViewContext},
 };
-use coord_2d::{Coord,Size};
+use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
 use rgb24::Rgb24;
 use std::time::Duration;
 
 const UI_NUM_ROWS: u32 = 2;
-
-pub struct App {
-    data: AppData,
-    view: AppView,
-}
-
-impl App {
-    pub fn new(
-        screen_size: Size,
-        rng_seed: u64,
-        visibility_algorithm: VisibilityAlgorithm,
-    ) -> Self {
-        Self {
-            data: AppData::new(screen_size, rng_seed, visibility_algorithm),
-            view: AppView::new(screen_size),
-        }
-    }
-}
-
-impl ChargridApp for App {
-    fn on_input(&mut self, input: Input) -> Option<ControlFlow> {
-        match input {
-            Input::Keyboard(keys::ETX) | Input::Keyboard(keys::ESCAPE) => Some(ControlFlow::Exit),
-            other => {
-                self.data.handle_input(other);
-                None
-            }
-        }
-    }
-    fn on_frame<F, C>(
-        &mut self,
-        _since_last_frame: Duration,
-        view_context: ViewContext<C>,
-        frame: &mut F,
-    ) -> Option<ControlFlow>
-        where
-            F: Frame,
-            C: ColModify,
-    {
-        self.view.view(&self.data, view_context, frame);
-        None
-    }
-}
 
 struct AppData {
     game_state: GameState,
@@ -64,18 +20,13 @@ struct AppData {
 }
 
 impl AppData {
-    fn new(
-        screen_size: Size,
-        rng_seed: u64,
-        visibility_algorithm: VisibilityAlgorithm,
-    ) -> Self {
+    fn new(screen_size: Size, rng_seed: u64, visibility_algorithm: VisibilityAlgorithm) -> Self {
         let game_area_size = screen_size.set_height(screen_size.height() - UI_NUM_ROWS);
         Self {
-            game_state: GameState::new(screen_size, rng_seed, visibility_algorithm),
+            game_state: GameState::new(game_area_size, rng_seed, visibility_algorithm),
             visibility_algorithm,
         }
     }
-
     fn handle_input(&mut self, input: Input) {
         if !self.game_state.is_player_alive() {
             return;
@@ -96,9 +47,9 @@ impl AppData {
 }
 
 struct AppView {
+    ui_y_offset: i32,
     game_view: GameView,
     ui_view: UiView,
-    ui_y_offset: i32,
 }
 
 impl AppView {
@@ -106,37 +57,66 @@ impl AppView {
         const UI_Y_PADDING: u32 = 1;
         let ui_y_offset = (screen_size.height() - UI_NUM_ROWS + UI_Y_PADDING) as i32;
         Self {
+            ui_y_offset,
             game_view: GameView::default(),
             ui_view: UiView::default(),
-            ui_y_offset,
         }
     }
 }
 
-// Frame represents the visible output of the app
-// calling set_cell_relative on it draws a character at that position
+mod colours {
+    use rgb24::Rgb24;
+    pub const PLAYER: Rgb24 = Rgb24::new_grey(255);
+    pub const ORC: Rgb24 = Rgb24::new(0, 187, 0);
+    pub const TROLL: Rgb24 = Rgb24::new(187, 0, 0);
+}
 
-// ColModify represents the color modifier
-// mainly used to dim the game area while a menu is visible
+fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
+    match tile {
+        Tile::Player => ViewCell::new()
+            .with_character('@')
+            .with_foreground(colours::PLAYER),
+        Tile::PlayerCorpse => ViewCell::new()
+            .with_character('%')
+            .with_foreground(colours::PLAYER),
+        Tile::Floor => ViewCell::new()
+            .with_character('.')
+            .with_foreground(Rgb24::new_grey(63))
+            .with_background(Rgb24::new(0, 0, 63)),
+        Tile::Wall => ViewCell::new()
+            .with_character('#')
+            .with_foreground(Rgb24::new(0, 63, 63))
+            .with_background(Rgb24::new(63, 127, 127)),
+        Tile::Npc(NpcType::Orc) => ViewCell::new()
+            .with_character('o')
+            .with_bold(true)
+            .with_foreground(colours::ORC),
+        Tile::Npc(NpcType::Troll) => ViewCell::new()
+            .with_character('T')
+            .with_bold(true)
+            .with_foreground(colours::TROLL),
+        Tile::NpcCorpse(NpcType::Orc) => ViewCell::new()
+            .with_character('%')
+            .with_bold(true)
+            .with_foreground(colours::ORC),
+        Tile::NpcCorpse(NpcType::Troll) => ViewCell::new()
+            .with_character('%')
+            .with_bold(true)
+            .with_foreground(colours::TROLL),
+    }
+}
 
-// ViewContext allows a view to tell child views to render at an offset or
-// with constraints. It's also a mechanism to pass color modifiers to child views
-
-// ViewCell is a character with a foreground and a background color, bold or underlined
-impl<'a> View<&'a AppData> for AppView {
-    fn view<F: Frame, C: ColModify>(
-        &mut self,
-        data: &'a AppData,
-        context: ViewContext<C>,
-        frame: &mut F
-    ) {
-        self.game_view.view(&data.game_state, context, frame);
-        let player_hit_points = data.game_state.player_hit_points();
-        self.ui_view.view(
-            UiData { player_hit_points },
-            context.add_offset(Coord::new(0, self.ui_y_offset)),
-            frame,
-        );
+fn previously_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
+    match tile {
+        Tile::Floor => ViewCell::new()
+            .with_character('.')
+            .with_foreground(Rgb24::new_grey(63))
+            .with_background(Rgb24::new_grey(0)),
+        Tile::Wall => ViewCell::new()
+            .with_character('#')
+            .with_foreground(Rgb24::new_grey(63))
+            .with_background(Rgb24::new_grey(0)),
+        _ => ViewCell::new(),
     }
 }
 
@@ -172,78 +152,62 @@ impl<'a> View<&'a GameState> for GameView {
     }
 }
 
-mod colours {
-    use rgb24::Rgb24;
-    pub const PLAYER: Rgb24 = Rgb24::new_grey(255);
-    pub const ORC: Rgb24 = Rgb24::new(0, 187, 0);
-    pub const TROLL: Rgb24 = Rgb24::new(187, 0, 0);
-}
-
-fn currently_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
-    match tile {
-        Tile::Floor => ViewCell::new()
-            .with_character('.')
-            .with_foreground(Rgb24::new_grey(63))
-            .with_background(Rgb24::new(0, 0,63)),
-        Tile::Npc(NpcType::Orc) => ViewCell::new()
-            .with_character('o')
-            .with_bold(true)
-            .with_foreground(Rgb24::new(0, 187, 0)),
-        Tile::Npc(NpcType::Troll) => ViewCell::new()
-            .with_character('T')
-            .with_bold(true)
-            .with_foreground(Rgb24::new(187, 0, 0)),
-        Tile::NpcCorpse(NpcType::Orc) => ViewCell::new()
-            .with_character('%')
-            .with_bold(true)
-            .with_foreground(colours::ORC),
-        Tile::NpcCorpse(NpcType::Troll) => ViewCell::new()
-            .with_character('%')
-            .with_bold(true)
-            .with_foreground(colours::TROLL),
-        Tile::Player => ViewCell::new()
-            .with_character('@')
-            .with_foreground(Rgb24::new_grey(255)),
-        Tile::PlayerCorpse => ViewCell::new()
-            .with_character('%')
-            .with_foreground(colours::PLAYER),
-        Tile::Wall => ViewCell::new()
-            .with_character('#')
-            .with_foreground(Rgb24::new(0, 63, 63))
-            .with_background(Rgb24::new(63, 127, 127)),
+impl<'a> View<&'a AppData> for AppView {
+    fn view<F: Frame, C: ColModify>(
+        &mut self,
+        data: &'a AppData,
+        context: ViewContext<C>,
+        frame: &mut F,
+    ) {
+        self.game_view.view(&data.game_state, context, frame);
+        let player_hit_points = data.game_state.player_hit_points();
+        self.ui_view.view(
+            UiData { player_hit_points },
+            context.add_offset(Coord::new(0, self.ui_y_offset)),
+            frame,
+        );
     }
 }
 
-fn previously_visible_view_cell_of_tile(tile: Tile) -> ViewCell {
-    match tile {
-        Tile::Floor => ViewCell::new()
-            .with_character('.')
-            .with_foreground(Rgb24::new_grey(63))
-            .with_background(Rgb24::new_grey(0)),
-        Tile::Npc(NpcType::Orc) => ViewCell::new()
-            .with_character('o')
-            .with_bold(true)
-            .with_foreground(Rgb24::new_grey(63)),
-        Tile::Npc(NpcType::Troll) => ViewCell::new()
-            .with_character('T')
-            .with_bold(true)
-            .with_foreground(Rgb24::new_grey(63)),
-        Tile::NpcCorpse(NpcType::Orc) => ViewCell::new()
-            .with_character('%')
-            .with_foreground(Rgb24::new_grey(63)),
-        Tile::NpcCorpse(NpcType::Troll) => ViewCell::new()
-            .with_character('%')
-            .with_foreground(Rgb24::new_grey(63)),
-        Tile::Player => ViewCell::new()
-            .with_character('@')
-            .with_foreground(Rgb24::new_grey(255)),
-        Tile::PlayerCorpse => ViewCell::new()
-            .with_character('%')
-            .with_foreground(Rgb24::new_grey(255)),
-        Tile::Wall => ViewCell::new()
-            .with_character('#')
-            .with_foreground(Rgb24::new_grey(63))
-            .with_background(Rgb24::new_grey(0)),
-        _ => ViewCell::new(),
+pub struct App {
+    data: AppData,
+    view: AppView,
+}
+
+impl App {
+    pub fn new(
+        screen_size: Size,
+        rng_seed: u64,
+        visibility_algorithm: VisibilityAlgorithm,
+    ) -> Self {
+        Self {
+            data: AppData::new(screen_size, rng_seed, visibility_algorithm),
+            view: AppView::new(screen_size),
+        }
+    }
+}
+
+impl ChargridApp for App {
+    fn on_input(&mut self, input: Input) -> Option<ControlFlow> {
+        match input {
+            Input::Keyboard(keys::ETX) | Input::Keyboard(keys::ESCAPE) => Some(ControlFlow::Exit),
+            other => {
+                self.data.handle_input(other);
+                None
+            }
+        }
+    }
+    fn on_frame<F, C>(
+        &mut self,
+        _since_last_frame: Duration,
+        view_context: ViewContext<C>,
+        frame: &mut F,
+    ) -> Option<ControlFlow>
+    where
+        F: Frame,
+        C: ColModify,
+    {
+        self.view.view(&self.data, view_context, frame);
+        None
     }
 }

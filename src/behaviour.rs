@@ -1,5 +1,4 @@
 use crate::world::World;
-
 use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
 use entity_table::Entity;
@@ -12,58 +11,6 @@ use grid_search_cardinal::{
 };
 use line_2d::LineSegment;
 use shadowcast::{vision_distance, VisionDistance};
-
-pub struct Agent {
-    turns_since_last_saw_player: u32,
-}
-
-impl Agent {
-    pub fn new() -> Self {
-        Self {
-            turns_since_last_saw_player: u32::MAX,
-        }
-    }
-
-    // Chooses an action for an NPC to take
-    // A second implementation of CanEnter is necessary so NPCs can route around another NPC
-    pub fn act(
-        &mut self,
-        entity: Entity,
-        player: Entity,
-        world: &World,
-        behaviour_context: &mut BehaviourContext,
-    ) -> NpcAction {
-        struct NpcCanEnter<'a> {
-            world: &'a World,
-        }
-        impl<'a> CanEnter for NpcCanEnter<'a> {
-            fn can_enter(&self, coord: Coord) -> bool {
-                self.world.can_npc_enter(coord)
-            }
-        }
-        let npc_coord = world.entity_coord(entity).expect("npc has no coord");
-        let player_coord = world.entity_coord(player).expect("player has no coord");
-        if !npc_has_line_of_sight(npc_coord, player_coord, world) {
-            self.turns_since_last_saw_player = 0;
-        } else {
-            self.turns_since_last_saw_player = self.turns_since_last_saw_player.saturating_add(1);
-        }
-        const MAX_TURNS_TO_CHASE_PLAYER_AFTER_LOSING_SIGHT: u32 = 3;
-        if self.turns_since_last_saw_player > MAX_TURNS_TO_CHASE_PLAYER_AFTER_LOSING_SIGHT {
-            return NpcAction::Wait;
-        }
-        const SEARCH_DISTANCE: u32 = 5;
-        match behaviour_context.distance_map_search_context.search_first(
-            &NpcCanEnter { world },
-            npc_coord,
-            SEARCH_DISTANCE,
-            &behaviour_context.distance_map_to_player,
-        ) {
-            None => NpcAction::Wait,
-            Some(direction) => NpcAction::Move(direction),
-        }
-    }
-}
 
 pub struct BehaviourContext {
     distance_map_to_player: DistanceMap,
@@ -80,7 +27,6 @@ impl BehaviourContext {
         }
     }
 
-    // Updates the distance map such that each cell contains the distance to the player
     pub fn update(&mut self, player: Entity, world: &World) {
         struct NpcCanEnterIgnoringOtherNpcs<'a> {
             world: &'a World,
@@ -101,13 +47,15 @@ impl BehaviourContext {
     }
 }
 
-// These are the different action and NPN can take
 pub enum NpcAction {
-    Move(CardinalDirection),
     Wait,
+    Move(CardinalDirection),
 }
 
-// Tests line of sight for NPCs
+pub struct Agent {
+    turns_since_last_saw_player: u32,
+}
+
 fn npc_has_line_of_sight(src: Coord, dst: Coord, world: &World) -> bool {
     const NPC_VISION_DISTANCE_SQUARED: u32 = 100;
     const NPC_VISION_DISTANCE: vision_distance::Circle =
@@ -125,4 +73,50 @@ fn npc_has_line_of_sight(src: Coord, dst: Coord, world: &World) -> bool {
         }
     }
     true
+}
+
+impl Agent {
+    pub fn new() -> Self {
+        Self {
+            turns_since_last_saw_player: u32::MAX,
+        }
+    }
+
+    pub fn act(
+        &mut self,
+        entity: Entity,
+        player: Entity,
+        world: &World,
+        behaviour_context: &mut BehaviourContext,
+    ) -> NpcAction {
+        struct NpcCanEnter<'a> {
+            world: &'a World,
+        }
+        impl<'a> CanEnter for NpcCanEnter<'a> {
+            fn can_enter(&self, coord: Coord) -> bool {
+                self.world.can_npc_enter(coord)
+            }
+        }
+        let npc_coord = world.entity_coord(entity).expect("npc has no coord");
+        let player_coord = world.entity_coord(player).expect("player has no coord");
+        if npc_has_line_of_sight(npc_coord, player_coord, world) {
+            self.turns_since_last_saw_player = 0;
+        } else {
+            self.turns_since_last_saw_player = self.turns_since_last_saw_player.saturating_add(1);
+        }
+        const MAX_TURNS_TO_CHASE_PLAYER_AFTER_LOSING_SIGHT: u32 = 3;
+        if self.turns_since_last_saw_player > MAX_TURNS_TO_CHASE_PLAYER_AFTER_LOSING_SIGHT {
+            return NpcAction::Wait;
+        }
+        const SEARCH_DISTANCE: u32 = 5;
+        match behaviour_context.distance_map_search_context.search_first(
+            &NpcCanEnter { world },
+            npc_coord,
+            SEARCH_DISTANCE,
+            &behaviour_context.distance_map_to_player,
+        ) {
+            None => NpcAction::Wait,
+            Some(direction) => NpcAction::Move(direction),
+        }
+    }
 }

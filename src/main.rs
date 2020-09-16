@@ -3,16 +3,16 @@ use chargrid_graphical::{Context, ContextDescriptor, Dimensions, FontBytes};
 use coord_2d::Size;
 use rand::Rng;
 use simon::Arg;
-use visibility::VisibilityAlgorithm;
-
 
 mod app;
 mod behaviour;
 mod game;
 mod terrain;
-mod visibility;
 mod ui;
+mod visibility;
 mod world;
+
+use visibility::VisibilityAlgorithm;
 
 struct Args {
     rng_seed: u64,
@@ -39,20 +39,18 @@ impl Args {
 }
 
 fn main() {
-    const CELL_SIZE_PX: f64 = 24.;
-
     let Args {
         rng_seed,
         visibility_algorithm,
     } = Args::parser().with_help_default().parse_env_or_exit();
     println!("RNG Seed: {}", rng_seed);
-
+    const CELL_SIZE_PX: f64 = 24.;
     let context = Context::new(ContextDescriptor {
         font_bytes: FontBytes {
             normal: include_bytes!("./fonts/PxPlus_IBM_CGAthin.ttf").to_vec(),
             bold: include_bytes!("./fonts/PxPlus_IBM_CGA.ttf").to_vec(),
         },
-        title: "RRRoguelike".to_string(),
+        title: "Chargrid Tutorial".to_string(),
         window_dimensions: Dimensions {
             width: 960.,
             height: 720.,
@@ -72,7 +70,7 @@ fn main() {
         underline_width: 0.1,
         underline_top_offset: 0.8,
     })
-    .expect("Failed to initialize the graphical context");
+    .expect("Failed to initialize graphical context");
     let screen_size = Size::new(40, 30);
     let app = App::new(screen_size, rng_seed, visibility_algorithm);
     context.run_app(app);
