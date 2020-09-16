@@ -1,5 +1,6 @@
 use crate::behaviour::Agent;
 use crate::terrain::{self, TerrainTile};
+use crate::game::LogMessage;
 use coord_2d::{Coord, Size};
 use direction::CardinalDirection;
 use entity_table::{ComponentTable, Entity, EntityAllocator};
@@ -16,6 +17,8 @@ impl HitPoints {
         Self { current: max, max }
     }
 }
+
+struct VictimDies;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NpcType {
@@ -87,6 +90,7 @@ impl World {
             spatial_table,
         }
     }
+
     fn spawn_wall(&mut self, coord: Coord) {
         let entity = self.entity_allocator.alloc();
         self.spatial_table
@@ -100,6 +104,7 @@ impl World {
             .unwrap();
         self.components.tile.insert(entity, Tile::Wall);
     }
+
     fn spawn_floor(&mut self, coord: Coord) {
         let entity = self.entity_allocator.alloc();
         self.spatial_table
@@ -113,6 +118,7 @@ impl World {
             .unwrap();
         self.components.tile.insert(entity, Tile::Floor);
     }
+
     fn spawn_player(&mut self, coord: Coord) -> Entity {
         let entity = self.entity_allocator.alloc();
         self.spatial_table
@@ -130,6 +136,7 @@ impl World {
             .insert(entity, HitPoints::new_full(20));
         entity
     }
+
     fn spawn_npc(&mut self, coord: Coord, npc_type: NpcType) -> Entity {
         let entity = self.entity_allocator.alloc();
         self.spatial_table
@@ -150,6 +157,7 @@ impl World {
         self.components.hit_points.insert(entity, hit_points);
         entity
     }
+
     pub fn populate<R: Rng>(&mut self, rng: &mut R) -> Populate {
         let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
         let mut player_entity = None;
@@ -177,7 +185,13 @@ impl World {
             ai_state,
         }
     }
-    pub fn maybe_move_character(&mut self, character_entity: Entity, direction: CardinalDirection) {
+
+    pub fn maybe_move_character(
+        &mut self,
+        character_entity: Entity,
+        direction: CardinalDirection,
+        message_log: &mut Vec<LogMessage>,
+    ) {
         let character_coord = self
             .spatial_table
             .coord_of(character_entity)
@@ -186,11 +200,18 @@ impl World {
         if new_character_coord.is_valid(self.spatial_table.grid_size()) {
             let dest_layers = self.spatial_table.layers_at_checked(new_character_coord);
             if let Some(dest_character_entity) = dest_layers.character {
-                let character_is_npc = self.components.npc_type.contains(character_entity);
+                let character_is_npc = self.components.npc_type.get(character_entity).cloned();
                 let dest_character_is_npc =
-                    self.components.npc_type.contains(dest_character_entity);
-                if character_is_npc != dest_character_is_npc {
-                    self.character_bump_attack(dest_character_entity);
+                    self.components.npc_type.get(dest_character_entity).cloned();
+                if character_is_npc.is_some() != dest_character_is_npc.is_some() {
+                    let victim_dies = self.character_bump_attack(dest_character_entity).is_some();
+                    let npc_type = character_is_npc.or(dest_character_is_npc).unwrap();
+                    Self::write_combat_log_messages(
+                        character_is_npc.is_none(),
+                        victim_dies,
+                        npc_type,
+                        message_log,
+                    );
                 }
             } else if dest_layers.feature.is_none() {
                 self.spatial_table
@@ -199,15 +220,19 @@ impl World {
             }
         }
     }
-    fn character_bump_attack(&mut self, victim: Entity) {
+
+    fn character_bump_attack(&mut self, victim: Entity) -> Option<VictimDies> {
         const DAMAGE: u32 = 1;
         if let Some(hit_points) = self.components.hit_points.get_mut(victim) {
             hit_points.current = hit_points.current.saturating_sub(DAMAGE);
             if hit_points.current == 0 {
                 self.character_die(victim);
+                return Some(VictimDies);
             }
         }
+        None
     }
+
     fn character_die(&mut self, entity: Entity) {
         if let Some(occpied_by_entity) = self
             .spatial_table
@@ -230,17 +255,21 @@ impl World {
         };
         self.components.tile.insert(entity, corpse_tile);
     }
+
     pub fn is_living_character(&self, entity: Entity) -> bool {
         self.spatial_table.layer_of(entity) == Some(Layer::Character)
     }
+
     pub fn remove_entity(&mut self, entity: Entity) {
         self.components.remove_entity(entity);
         self.spatial_table.remove(entity);
         self.entity_allocator.free(entity);
     }
+
     pub fn size(&self) -> Size {
         self.spatial_table.grid_size()
     }
+
     pub fn opacity_at(&self, coord: Coord) -> u8 {
         if self
             .spatial_table
@@ -253,18 +282,22 @@ impl World {
             0
         }
     }
+
     pub fn hit_points(&self, entity: Entity) -> Option<HitPoints> {
         self.components.hit_points.get(entity).cloned()
     }
+
     pub fn entity_coord(&self, entity: Entity) -> Option<Coord> {
         self.spatial_table.coord_of(entity)
     }
+
     pub fn can_npc_enter_ignoring_other_npcs(&self, coord: Coord) -> bool {
         self.spatial_table
             .layers_at(coord)
             .map(|layers| layers.feature.is_none())
             .unwrap_or(false)
     }
+
     pub fn can_npc_enter(&self, coord: Coord) -> bool {
         self.spatial_table
             .layers_at(coord)
@@ -278,10 +311,32 @@ impl World {
             })
             .unwrap_or(false)
     }
+
     pub fn can_npc_see_through_cell(&self, coord: Coord) -> bool {
         self.spatial_table
             .layers_at(coord)
             .map(|layers| layers.feature.is_none())
             .unwrap_or(false)
+    }
+
+    fn write_combat_log_messages(
+        attacker_is_player: bool,
+        victim_dies: bool,
+        npc_type: NpcType,
+        message_log: &mut Vec<LogMessage>,
+    ) {
+        if attacker_is_player {
+            if victim_dies {
+                message_log.push(LogMessage::PlayerKillsNpc(npc_type));
+            } else {
+                message_log.push(LogMessage::PlayerAttacksNpc(npc_type));
+            }
+        } else {
+            if victim_dies {
+                message_log.push(LogMessage::NpcKillsPlayer(npc_type));
+            } else {
+                message_log.push(LogMessage::NpcAttacksPlayer(npc_type));
+            }
+        }
     }
 }

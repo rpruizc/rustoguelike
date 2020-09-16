@@ -1,6 +1,6 @@
 use crate::behaviour::{Agent, BehaviourContext, NpcAction};
 use crate::visibility::{CellVisibility, VisibilityAlgorithm, VisibilityGrid};
-use crate::world::{HitPoints, Location, Populate, Tile, World};
+use crate::world::{HitPoints, Location, NpcType, Populate, Tile, World};
 use coord_2d::Size;
 use direction::CardinalDirection;
 use entity_table::ComponentTable;
@@ -14,6 +14,14 @@ pub struct EntityToRender {
     pub visibility: CellVisibility,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum LogMessage {
+    PlayerAttacksNpc(NpcType),
+    NpcAttacksPlayer(NpcType),
+    PlayerKillsNpc(NpcType),
+    NpcKillsPlayer(NpcType),
+}
+
 pub struct GameState {
     world: World,
     player_entity: Entity,
@@ -21,6 +29,7 @@ pub struct GameState {
     visibility_grid: VisibilityGrid,
     ai_state: ComponentTable<Agent>,
     behaviour_context: BehaviourContext,
+    message_log: Vec<LogMessage>,
 }
 
 impl GameState {
@@ -45,18 +54,22 @@ impl GameState {
             visibility_grid,
             ai_state,
             behaviour_context,
+            message_log: Vec::new(),
         };
         game_state.update_visibility(initial_visibility_algorithm);
         game_state
     }
+
     pub fn wait_player(&mut self) {
         self.ai_turn();
     }
+
     pub fn maybe_move_player(&mut self, direction: CardinalDirection) {
         self.world
-            .maybe_move_character(self.player_entity, direction);
+            .maybe_move_character(self.player_entity, direction, &mut self.message_log);
         self.ai_turn();
     }
+
     pub fn entities_to_render<'a>(&'a self) -> impl 'a + Iterator<Item = EntityToRender> {
         let tile_component = &self.world.components.tile;
         let spatial_table = &self.world.spatial_table;
@@ -71,6 +84,7 @@ impl GameState {
             })
         })
     }
+
     pub fn update_visibility(&mut self, visibility_algorithm: VisibilityAlgorithm) {
         let player_coord = self
             .world
@@ -84,6 +98,7 @@ impl GameState {
             visibility_algorithm,
         );
     }
+
     fn ai_turn(&mut self) {
         self.behaviour_context
             .update(self.player_entity, &self.world);
@@ -104,16 +119,25 @@ impl GameState {
             );
             match npc_action {
                 NpcAction::Wait => (),
-                NpcAction::Move(direction) => self.world.maybe_move_character(entity, direction),
+                NpcAction::Move(direction) => {
+                    self.world
+                        .maybe_move_character(entity, direction, &mut self.message_log)
+                },
             }
         }
     }
+
     pub fn is_player_alive(&self) -> bool {
         self.world.is_living_character(self.player_entity)
     }
+
     pub fn player_hit_points(&self) -> HitPoints {
         self.world
             .hit_points(self.player_entity)
             .expect("player has no hit points")
+    }
+
+    pub fn message_log(&self) -> &[LogMessage] {
+        &self.message_log
     }
 }
