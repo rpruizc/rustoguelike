@@ -50,7 +50,7 @@ fn main() {
             normal: include_bytes!("./fonts/PxPlus_IBM_CGAthin.ttf").to_vec(),
             bold: include_bytes!("./fonts/PxPlus_IBM_CGA.ttf").to_vec(),
         },
-        title: "Chargrid Tutorial".to_string(),
+        title: "Rustoguelike".to_string(),
         window_dimensions: Dimensions {
             width: 960.,
             height: 720.,
