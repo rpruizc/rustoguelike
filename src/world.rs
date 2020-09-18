@@ -35,6 +35,19 @@ impl NpcType {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ItemType {
+    HealthPotion,
+}
+
+impl ItemType {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::HealthPotion => "health potion",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Tile {
     Player,
@@ -43,6 +56,7 @@ pub enum Tile {
     Wall,
     Npc(NpcType),
     NpcCorpse(NpcType),
+    Item(ItemType),
 }
 
 entity_table::declare_entity_module! {
@@ -50,6 +64,7 @@ entity_table::declare_entity_module! {
         tile: Tile,
         npc_type: NpcType,
         hit_points: HitPoints,
+        item: ItemType,
     }
 }
 
@@ -59,7 +74,7 @@ spatial_table::declare_layers_module! {
     layers {
         floor: Floor,
         character: Character,
-        corpse: Corpse,
+        object: Object,
         feature: Feature,
     }
 }
@@ -158,6 +173,21 @@ impl World {
         entity
     }
 
+    fn spawn_item(&mut self, coord: Coord, item_type: ItemType) {
+        let entity = self.entity_allocator.alloc();
+        self.spatial_table
+            .update(
+                entity,
+                Location {
+                    coord,
+                    layer: Some(Layer::Object),
+                },
+            )
+            .unwrap();
+        self.components.tile.insert(entity, Tile::Item(item_type));
+        self.components.item.insert(entity, item_type);
+    }
+
     pub fn populate<R: Rng>(&mut self, rng: &mut R) -> Populate {
         let terrain = terrain::generate_dungeon(self.spatial_table.grid_size(), rng);
         let mut player_entity = None;
@@ -177,6 +207,11 @@ impl World {
                     let entity = self.spawn_npc(coord, npc_type);
                     self.spawn_floor(coord);
                     ai_state.insert(entity, Agent::new());
+                }
+                TerrainTile::Item(item_type) => {
+                    self.spawn_item(coord, item_type);
+                    self.spawn_floor(coord);
+
                 }
             }
         }
@@ -234,17 +269,17 @@ impl World {
     }
 
     fn character_die(&mut self, entity: Entity) {
-        if let Some(occpied_by_entity) = self
+        if let Some(occupied_by_entity) = self
             .spatial_table
-            .update_layer(entity, Layer::Corpse)
+            .update_layer(entity, Layer::Object)
             .err()
             .map(|e| e.unwrap_occupied_by())
         {
             // If a character dies on a cell which contains a corpse, remove the existing corpse
             // from existence and replace it with the character's corpse.
-            self.remove_entity(occpied_by_entity);
+            self.remove_entity(occupied_by_entity);
             self.spatial_table
-                .update_layer(entity, Layer::Corpse)
+                .update_layer(entity, Layer::Object)
                 .unwrap();
         }
         let current_tile = self.components.tile.get(entity).unwrap();
